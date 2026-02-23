@@ -6,7 +6,7 @@ st.set_page_config(
     page_title="Local AI Pro",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto", # Ekran boyutuna göre otomatik açılır/kapanır
 )
 
 st.markdown("""
@@ -15,11 +15,9 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 /* ---------------- GLOBAL ---------------- */
-
 html, body, [class*="st-"] {
     font-family: 'Inter', sans-serif;
     color: #EAF6FF !important;
-    font-size: 22px !important;
 }
 
 /* BACKGROUND */
@@ -30,114 +28,91 @@ html, body, [class*="st-"] {
     background-attachment: fixed;
 }
 
-/* ---------------- SIDEBAR BÜYÜTÜLDÜ ---------------- */
-
+/* ---------------- SIDEBAR ---------------- */
+/* Genişlik kısıtlaması kaldırıldı, Streamlit'in mobil uyumluluğuna bırakıldı */
 [data-testid="stSidebar"] {
     background: rgba(8,18,32,0.97) !important;
     backdrop-filter: blur(25px);
-    width: 560px !important;
     border-right: 1px solid rgba(255,255,255,0.06);
-    padding-top: 50px;
 }
 
-/* Sidebar başlıklar büyük */
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
-    font-size: 36px !important;
-    font-weight: 900 !important;
+    font-weight: 800 !important;
     color: #4DA8FF !important;
 }
 
-/* Sidebar yazılar büyütüldü */
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] span,
-[data-testid="stSidebar"] p {
-    font-size: 22px !important;
-}
-
-/* Slider daha kalın */
 [data-testid="stSidebar"] .stSlider > div {
-    padding-top: 20px;
-    padding-bottom: 20px;
+    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
-/* ---------------- ANA BLOK ORTALANMASIN ---------------- */
-
+/* ---------------- ANA BLOK ---------------- */
+/* Ekran küçüldüğünde paddingler daralacak şekilde % ve rem kullanıldı */
 .main .block-container {
-    padding-left: 6% !important;
-    padding-right: 6% !important;
-    max-width: 1100px !important;
+    padding-left: 5% !important;
+    padding-right: 5% !important;
+    padding-top: 2rem !important;
+    max-width: 1200px !important;
 }
 
 /* ---------------- CHAT MESAJLARI ---------------- */
-
 .stChatMessage {
     background: rgba(255,255,255,0.05) !important;
     backdrop-filter: blur(16px);
-    border-radius: 24px;
+    border-radius: 16px;
     border: 1px solid rgba(255,255,255,0.08);
-    padding: 40px !important;
-    font-size: 24px !important;
-    margin-bottom: 30px !important;
+    padding: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
 }
 
-/* ---------------- EN DİKKAT ÇEKEN KISIM: CHAT INPUT ---------------- */
-
+/* ---------------- CHAT INPUT ---------------- */
+/* Paddingler ve fontlar mobile uyumlu hale getirildi */
 .stChatInputContainer {
-    padding: 3rem 8% !important;
+    padding: 1rem 5% 2rem 5% !important;
     background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(5,11,20,0.9) 100%);
 }
 
-/* INPUT DEV + GLOW */
 .stChatInputContainer textarea {
     background: rgba(255,255,255,0.07) !important;
     border: 2px solid rgba(77,168,255,0.5) !important;
-    border-radius: 30px !important;
-    font-size: 28px !important;
-    padding: 30px !important;
-    min-height: 110px !important;
+    border-radius: 20px !important;
+    padding: 1rem !important;
     color: #ffffff !important;
-    box-shadow: 0 0 30px rgba(77,168,255,0.2);
+    box-shadow: 0 0 15px rgba(77,168,255,0.2);
     transition: all 0.3s ease;
 }
 
-/* Focus olduğunda spotlight efekti */
 .stChatInputContainer textarea:focus {
     border: 2px solid #4DA8FF !important;
-    box-shadow: 0 0 60px rgba(77,168,255,0.5);
-    transform: scale(1.01);
+    box-shadow: 0 0 30px rgba(77,168,255,0.4);
 }
 
-/* SEND BUTON DAHA BÜYÜK */
+/* SEND BUTON */
 button[kind="primary"] {
     background: linear-gradient(135deg, #4DA8FF, #6FE7D2) !important;
     color: #07131f !important;
-    font-weight: 900 !important;
-    font-size: 22px !important;
-    border-radius: 40px !important;
-    padding: 16px 40px !important;
+    font-weight: 700 !important;
+    border-radius: 20px !important;
     border: none !important;
     transition: all 0.3s ease;
 }
 
 button[kind="primary"]:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 35px rgba(77,168,255,0.4);
+    box-shadow: 0 5px 15px rgba(77,168,255,0.4);
 }
 
 /* ---------------- EXPANDER ---------------- */
-
 .stExpander {
     background: rgba(255,255,255,0.04) !important;
-    border-radius: 20px !important;
-    padding: 25px !important;
-    font-size: 22px !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
 }
 
-/* ---------------- SCROLL ---------------- */
-
+/* ---------------- SCROLLBAR ---------------- */
 ::-webkit-scrollbar {
-    width: 10px;
+    width: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -188,7 +163,7 @@ with st.sidebar:
     )
 
     if uploaded_files:
-        if st.button("🚀 VERİLERİ SİSTEME YÜKLE", use_container_width=True, type="primary"):
+        if st.button("🚀 VERİLERİ YÜKLE", use_container_width=True, type="primary"):
             with st.status("Yapay zeka belgeleri okuyor...", expanded=False) as status:
                 try:
                     for file in uploaded_files:
@@ -203,13 +178,13 @@ with st.sidebar:
 
     for file_name in st.session_state.indexed_files:
         st.markdown(
-            f"<div style='color:#FFD700; border:1px solid #FFD700; padding:10px; border-radius:10px; margin-bottom:5px;'>📁 {file_name} aktif</div>",
+            f"<div style='color:#FFD700; border:1px solid rgba(255,215,0,0.5); padding:8px; border-radius:8px; margin-bottom:5px; font-size:0.9rem;'>📁 {file_name} aktif</div>",
             unsafe_allow_html=True,
         )
 
     if st.session_state.indexed_files:
         st.session_state.active_doc_id = st.selectbox(
-            "Soru sorulacak aktif doküman",
+            "Aktif dokümanı seçin:",
             options=st.session_state.indexed_files,
             index=max(0, len(st.session_state.indexed_files) - 1),
         )
@@ -221,9 +196,9 @@ with st.sidebar:
 
 # --- ANA EKRAN ---
 if not st.session_state.messages:
-    st.markdown('<h1 class="hero-title">Size nasıl yardımcı olabilirim?</h1>', unsafe_allow_html=True)
+    st.markdown('<h2 style="text-align: center; color: #4DA8FF; margin-top: 2rem;">Size nasıl yardımcı olabilirim?</h2>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="hero-subtitle">Belgelerini yükle ve yüksek performanslı AI ile sohbete başla.</p>',
+        '<p style="text-align: center; color: #EAF6FF; opacity: 0.8;">Belgelerini yükle ve yüksek performanslı AI ile sohbete başla.</p>',
         unsafe_allow_html=True,
     )
 
