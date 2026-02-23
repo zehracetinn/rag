@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import numpy as np
 import faiss
 import requests
@@ -126,7 +127,101 @@ class RAGEngine:
         q = question.lower()
         return any(key in q for key in SUMMARY_KEYWORDS)
 
+    def _normalize_ws(self, text: str) -> str:
+        return re.sub(r"\s+", " ", text or "").strip()
+
+    def _ensure_sentence(self, text: str) -> str:
+        t = self._normalize_ws(text).strip(" '\"`")
+        if not t:
+            return ""
+        if t[-1] not in ".!?":
+            t += "."
+        return t
+
+    def _extract_json_obj(self, text: str):
+        raw = (text or "").strip()
+        if not raw:
+            return None
+
+        try:
+            obj = json.loads(raw)
+            return obj if isinstance(obj, dict) else None
+        except Exception:
+            pass
+
+        match = re.search(r"\{[\s\S]*\}", raw)
+        if not match:
+            return None
+
+        try:
+            obj = json.loads(match.group(0))
+            return obj if isinstance(obj, dict) else None
+        except Exception:
+            return None
+
+    def _postprocess_summary(self, raw_answer: str) -> str:
+        obj = self._extract_json_obj(raw_answer)
+        if obj:
+            keys = ["ana_konu", "nokta1", "nokta2", "nokta3", "sonuc"]
+            sentences = [self._ensure_sentence(str(obj.get(k, ""))) for k in keys]
+            sentences = [s for s in sentences if s]
+            if len(sentences) >= 5:
+                return " ".join(sentences[:5])
+
+        cleaned = (raw_answer or "")
+        cleaned = re.sub(r"\b\d+\)\s*", " ", cleaned)
+        cleaned = re.sub(r"\b\d+\.\s*", " ", cleaned)
+        cleaned = self._normalize_ws(cleaned)
+
+        parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", cleaned) if p.strip()]
+        banned = ("doküman soru-cevap asistanı", "kurallar", "bağlam", "soru", "json")
+        parts = [p for p in parts if not any(b in p.lower() for b in banned)]
+        parts = [self._ensure_sentence(p) for p in parts if self._ensure_sentence(p)]
+
+        if len(parts) >= 5:
+            return " ".join(parts[:5])
+        if parts:
+            return " ".join(parts)
+        return "Bu bilgi dokümanda bulunamadı."
+
+    def _build_summary_prompt(self, context: str, question: str) -> str:
+        return f"""Sen yalnızca verilen bağlama göre özet çıkaran bir asistansın.
+
+YALNIZCA GEÇERLİ JSON DÖNDÜR. JSON dışına tek karakter bile yazma.
+
+JSON şeması:
+{{
+  "ana_konu": "Tek net cümle",
+  "nokta1": "Birinci önemli nokta cümlesi",
+  "nokta2": "İkinci önemli nokta cümlesi",
+  "nokta3": "Üçüncü önemli nokta cümlesi",
+  "sonuc": "Kısa genel sonuç cümlesi"
+}}
+
+Kurallar:
+- Tam olarak 1+3+1 yapısı kullan (toplam 5 cümlelik içerik).
+- Her alan tek, tamamlanmış ve Türkçe bir cümle olsun.
+- Metni aynen kopyalama, uzun alıntı yapma.
+- Bağlam dışı bilgi ekleme.
+
+BAĞLAM:
+{context}
+
+SORU:
+{question}
+
+JSON:
+""".strip()
+
     def ask_stream(self, question: str, top_k: int = 6, doc_id: str | None = None):
+        if self._is_summary_question(question):
+            out = self.ask(question, top_k=top_k, doc_id=doc_id)
+            if "hata" in out:
+                yield f"[ERROR] {out['hata']}"
+            else:
+                yield out.get("cevap", "")
+            return
+
         context, _sources = self._hybrid_context(question, top_k=top_k, doc_id=doc_id)
         prompt = self._build_prompt(context, question)
         is_summary = self._is_summary_question(question)
@@ -137,8 +232,8 @@ class RAGEngine:
             "stream": True,
             "options": {
                 "num_predict": MAX_TOKENS_SUMMARY if is_summary else MAX_TOKENS_QA,
-                "temperature": 0.0,
-                "top_p": 0.8,
+                "temperature": 0.15 if is_summary else 0.0,
+                "top_p": 0.9 if is_summary else 0.8,
                 "repeat_penalty": 1.1,
             },
         }
@@ -221,7 +316,11 @@ class RAGEngine:
 
         summary_mode = self._is_summary_question(question)
 
-        search_k = min(len(self.chunks), max(top_k, 24 if summary_mode else 12))
+        search_k = (
+            min(len(self.chunks), max(16, top_k * 4))
+            if summary_mode
+            else min(len(self.chunks), max(12, top_k * 2))
+        )
         scores, indices = self.index.search(np.array([query_vec]), k=search_k)
         candidate_pairs = [
             (int(idx), float(score))
@@ -231,29 +330,23 @@ class RAGEngine:
         candidates = [idx for idx, _ in candidate_pairs]
 
         if doc_id:
-            filtered = [idx for idx in candidates if self.chunks[idx]["doc_id"] == doc_id]
-            if filtered:
-                candidates = filtered
+            candidates = [idx for idx in candidates if self.chunks[idx]["doc_id"] == doc_id]
+            if not candidates:
+                raise RuntimeError(f"Secili dokuman icin uygun baglam bulunamadi: {doc_id}")
 
         if not candidates:
             raise RuntimeError("Uygun bağlam bulunamadı.")
 
         if summary_mode:
-            # Ozet sorularinda birincil dokumana odaklanarak daha tutarli baglam olustur.
-            primary_doc = self.chunks[candidates[0]]["doc_id"]
-            primary_doc_indices = [
-                idx for idx, _ in candidate_pairs if self.chunks[idx]["doc_id"] == primary_doc
-            ]
-
-            selected_indices = primary_doc_indices[: min(8, len(primary_doc_indices))]
-            if len(selected_indices) < 8:
-                for idx, _ in candidate_pairs:
-                    if idx not in selected_indices:
-                        selected_indices.append(idx)
-                    if len(selected_indices) >= 12:
-                        break
-
-            max_chars = MAX_SUMMARY_CONTEXT_CHARS
+            summary_k = min(len(candidates), max(1, top_k))
+            selected_indices = mmr_select(
+                query_vec,
+                self.doc_embeddings,
+                candidates.copy(),
+                k=summary_k,
+                lam=0.82,
+            )
+            max_chars = min(12000, max(MAX_SUMMARY_CONTEXT_CHARS, summary_k * 900))
         else:
             selected_indices = mmr_select(
                 query_vec,
@@ -264,8 +357,6 @@ class RAGEngine:
             max_chars = MAX_CONTEXT_CHARS
 
         selected_chunks = [self.chunks[i] for i in selected_indices]
-        if summary_mode:
-            selected_chunks = sorted(selected_chunks, key=lambda c: (c["doc_id"], c["chunk_id"]))
 
         context_parts = []
         total = 0
@@ -284,13 +375,7 @@ class RAGEngine:
     # --------------------------------------------------
     def _build_prompt(self, context: str, question: str):
         if self._is_summary_question(question):
-            instruction = (
-                "Bu bir ozet sorusu. Cevabi 4-5 tam cumlelik tek paragraf halinde yaz. "
-                "Her cumle net, tamamlanmis ve ozne-yuklem icersin. Liste, kod, anahtar kelime yigini "
-                "ve kesik ifade kullanma. Ilk cumlede ana konuyu, sonraki cumlelerde onemli noktalarin "
-                "neden onemli oldugunu acikla. Metni oldugu gibi kopyalama; 8 kelimeden uzun dogrudan "
-                "alinti yapma. Baglamda olmayan bilgi ekleme."
-            )
+            return self._build_summary_prompt(context, question)
         else:
             instruction = (
                 "Soruya yalnızca bağlamdan cevap ver. Bağlamda yoksa sadece 'Bu bilgi dokümanda bulunamadı.' yaz."
@@ -325,8 +410,8 @@ CEVAP:
             "stream": False,
             "options": {
                 "num_predict": MAX_TOKENS_SUMMARY if is_summary else MAX_TOKENS_QA,
-                "temperature": 0.0,
-                "top_p": 0.8,
+                "temperature": 0.15 if is_summary else 0.0,
+                "top_p": 0.9 if is_summary else 0.8,
                 "repeat_penalty": 1.1,
             },
         }
@@ -340,6 +425,8 @@ CEVAP:
             r.raise_for_status()
 
             answer = r.json().get("response", "").strip()
+            if is_summary:
+                answer = self._postprocess_summary(answer)
 
             return {"cevap": answer, "kaynaklar": sources}
 

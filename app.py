@@ -9,27 +9,148 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- CSS ---
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    html, body, [class*="st-"] { font-family: 'Inter', sans-serif; font-size: 22px !important; color: #ffffff !important; }
-    .stApp { background-color: #000000 !important; }
-    [data-testid="stSidebar"] { background-color: #0a0a0a !important; border-right: 2px solid #FFD700; width: 450px !important; }
-    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: #FFD700 !important; font-weight: 800; font-size: 36px !important; }
-    .stChatMessage { font-size: 24px !important; padding: 40px !important; background-color: #000000 !important; border-bottom: 1px solid #333333 !important; }
-    [data-testid="stChatMessage"]:nth-child(even) { background-color: #111111 !important; }
-    .hero-title { font-size: 72px !important; font-weight: 800; color: #FFD700; text-align: center; margin-top: 50px; }
-    .hero-subtitle { font-size: 28px !important; color: #ffffff; text-align: center; margin-bottom: 50px; }
-    .stChatInputContainer { padding: 2rem 10% !important; background-color: #000000 !important; }
-    .stChatInputContainer textarea { background-color: #1a1a1a !important; border: 2px solid #FFD700 !important; color: #ffffff !important; border-radius: 12px !important; font-size: 24px !important; }
-    button[kind="primary"] { background-color: #FFD700 !important; color: #000000 !important; font-weight: 800 !important; font-size: 22px !important; border: none !important; }
-    .stExpander { background-color: #1a1a1a !important; border: 1px solid #FFD700 !important; }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<style>
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+/* ---------------- GLOBAL ---------------- */
+
+html, body, [class*="st-"] {
+    font-family: 'Inter', sans-serif;
+    color: #EAF6FF !important;
+    font-size: 22px !important;
+}
+
+/* BACKGROUND */
+.stApp {
+    background: radial-gradient(circle at 20% 20%, rgba(0,200,255,0.12), transparent 40%),
+                radial-gradient(circle at 80% 40%, rgba(0,255,200,0.08), transparent 40%),
+                linear-gradient(135deg, #050b14 0%, #07131f 50%, #040a12 100%);
+    background-attachment: fixed;
+}
+
+/* ---------------- SIDEBAR BÜYÜTÜLDÜ ---------------- */
+
+[data-testid="stSidebar"] {
+    background: rgba(8,18,32,0.97) !important;
+    backdrop-filter: blur(25px);
+    width: 560px !important;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    padding-top: 50px;
+}
+
+/* Sidebar başlıklar büyük */
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    font-size: 36px !important;
+    font-weight: 900 !important;
+    color: #4DA8FF !important;
+}
+
+/* Sidebar yazılar büyütüldü */
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] p {
+    font-size: 22px !important;
+}
+
+/* Slider daha kalın */
+[data-testid="stSidebar"] .stSlider > div {
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+/* ---------------- ANA BLOK ORTALANMASIN ---------------- */
+
+.main .block-container {
+    padding-left: 6% !important;
+    padding-right: 6% !important;
+    max-width: 1100px !important;
+}
+
+/* ---------------- CHAT MESAJLARI ---------------- */
+
+.stChatMessage {
+    background: rgba(255,255,255,0.05) !important;
+    backdrop-filter: blur(16px);
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 40px !important;
+    font-size: 24px !important;
+    margin-bottom: 30px !important;
+}
+
+/* ---------------- EN DİKKAT ÇEKEN KISIM: CHAT INPUT ---------------- */
+
+.stChatInputContainer {
+    padding: 3rem 8% !important;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(5,11,20,0.9) 100%);
+}
+
+/* INPUT DEV + GLOW */
+.stChatInputContainer textarea {
+    background: rgba(255,255,255,0.07) !important;
+    border: 2px solid rgba(77,168,255,0.5) !important;
+    border-radius: 30px !important;
+    font-size: 28px !important;
+    padding: 30px !important;
+    min-height: 110px !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 30px rgba(77,168,255,0.2);
+    transition: all 0.3s ease;
+}
+
+/* Focus olduğunda spotlight efekti */
+.stChatInputContainer textarea:focus {
+    border: 2px solid #4DA8FF !important;
+    box-shadow: 0 0 60px rgba(77,168,255,0.5);
+    transform: scale(1.01);
+}
+
+/* SEND BUTON DAHA BÜYÜK */
+button[kind="primary"] {
+    background: linear-gradient(135deg, #4DA8FF, #6FE7D2) !important;
+    color: #07131f !important;
+    font-weight: 900 !important;
+    font-size: 22px !important;
+    border-radius: 40px !important;
+    padding: 16px 40px !important;
+    border: none !important;
+    transition: all 0.3s ease;
+}
+
+button[kind="primary"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 35px rgba(77,168,255,0.4);
+}
+
+/* ---------------- EXPANDER ---------------- */
+
+.stExpander {
+    background: rgba(255,255,255,0.04) !important;
+    border-radius: 20px !important;
+    padding: 25px !important;
+    font-size: 22px !important;
+}
+
+/* ---------------- SCROLL ---------------- */
+
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.35);
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # --- BACKEND ---
 API_BASE = "http://127.0.0.1:8000"
