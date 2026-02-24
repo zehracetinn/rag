@@ -17,7 +17,7 @@ st.markdown("""
 
 html, body, [class*="st-"] {
     font-family: 'Inter', sans-serif;
-    color: #E2E8F0 !important; /* Göz yormayan, okunaklı kırık beyaz */
+    color: #E2E8F0 !important;
 }
 
 /* --- ANİMASYONLAR --- */
@@ -53,7 +53,7 @@ html, body, [class*="st-"] {
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
     font-weight: 700 !important;
-    background: linear-gradient(135deg, #4DA8FF, #D946EF); /* Instagram/AI geçişi */
+    background: linear-gradient(135deg, #4DA8FF, #D946EF);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     letter-spacing: -0.5px;
@@ -78,7 +78,7 @@ html, body, [class*="st-"] {
     padding-left: 5% !important;
     padding-right: 5% !important;
     padding-top: 3rem !important;
-    max-width: 900px !important; /* ChatGPT gibi tam ortalanmış ve okunaklı */
+    max-width: 900px !important;
 }
 
 /* --- SOHBET MESAJLARI (CHATGPT DÜZENİ) --- */
@@ -93,7 +93,6 @@ html, body, [class*="st-"] {
     animation: fadeIn 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-/* Kullanıcı mesajını biraz daha farklılaştır (İsteğe bağlı) */
 [data-testid="chatAvatarIcon-user"] {
     background: linear-gradient(135deg, #FF6B6B, #5562EA) !important;
 }
@@ -104,7 +103,7 @@ html, body, [class*="st-"] {
 /* --- CHAT INPUT (GÖZ ALMAYAN, MODERN KUTU) --- */
 .stChatInputContainer {
     padding: 1rem 5% 2rem 5% !important;
-    background: transparent !important; /* Beyaz arka planı sildik */
+    background: transparent !important;
 }
 
 .stChatInputContainer textarea {
@@ -143,7 +142,6 @@ button[kind="primary"]:hover {
     box-shadow: 0 8px 25px rgba(231, 60, 126, 0.5);
 }
 
-/* SECONDARY BUTONLAR (Hafızayı Temizle vb.) */
 button[kind="secondary"] {
     background: rgba(255, 255, 255, 0.05) !important;
     color: #E2E8F0 !important;
@@ -168,6 +166,42 @@ button[kind="secondary"]:hover {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
+}
+
+/* =========================================================
+   MOBİL EKRAN UYUMLULUĞU (RESPONSIVE TASARIM)
+   ========================================================= */
+@media (max-width: 768px) {
+    /* Ana ekran kenar boşluklarını telefona göre daralt */
+    .main .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        padding-top: 1.5rem !important;
+    }
+    
+    /* Mesaj kutularını telefona uygun boyuta çek */
+    .stChatMessage {
+        padding: 1rem !important;
+        margin-bottom: 1rem !important;
+        border-radius: 12px;
+    }
+    
+    /* Yazı yazma alanını telefon ekranına tam oturt */
+    .stChatInputContainer {
+        padding: 0.5rem 1rem 1rem 1rem !important;
+        background: #0B0E14 !important; /* Telefonda okunabilirliği artırır */
+    }
+    
+    .stChatInputContainer textarea {
+        padding: 1rem !important;
+        border-radius: 20px !important;
+        font-size: 16px !important; /* Telefonda klavyenin zoom yapmasını engeller (iOS düzeltmesi) */
+    }
+    
+    /* Sidebar genişliğini sınırlama, Streamlit'in native çekmecesini kullanmasını sağla */
+    [data-testid="stSidebar"] {
+        max-width: 85vw !important; /* Ekranın %85'inden fazlasını kaplamasın */
+    }
 }
 
 </style>
