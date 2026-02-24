@@ -212,6 +212,12 @@ button[kind="secondary"]:hover {
 """, unsafe_allow_html=True)
 
 # --- BACKEND / ENGINE ---
+# Streamlit Cloud secrets -> runtime env bridge
+if not os.getenv("HF_TOKEN"):
+    secret_token = st.secrets.get("HF_TOKEN", "") if hasattr(st, "secrets") else ""
+    if secret_token:
+        os.environ["HF_TOKEN"] = secret_token
+
 API_BASE = os.getenv("RAG_API_BASE", "").strip().rstrip("/")
 USE_REMOTE_API = bool(API_BASE)
 
@@ -304,20 +310,20 @@ with st.sidebar:
         if st.button("🚀 VERİLERİ YÜKLE", use_container_width=True, type="primary"):
             with st.status("Yapay zeka belgeleri okuyor...", expanded=False) as status:
                 try:
-                    for file in uploaded_files:
-                        if USE_REMOTE_API:
-                            files = {"file": (file.name, file.getvalue(), "application/pdf")}
-                            response = requests.post(f"{API_BASE}/upload", files=files, timeout=300)
-                            if response.status_code != 200:
-                                raise RuntimeError(response.text)
-                        else:
-                            local_upload(file)
+                        for file in uploaded_files:
+                            if USE_REMOTE_API:
+                                files = {"file": (file.name, file.getvalue(), "application/pdf")}
+                                response = requests.post(f"{API_BASE}/upload", files=files, timeout=300)
+                                if response.status_code != 200:
+                                    raise RuntimeError(response.text)
+                            else:
+                                local_upload(file)
 
-                        if file.name not in st.session_state.indexed_files:
-                            st.session_state.indexed_files.append(file.name)
+                            if file.name not in st.session_state.indexed_files:
+                                st.session_state.indexed_files.append(file.name)
 
-                    status.update(label="Yükleme Başarılı!", state="complete")
-                    st.rerun()
+                        status.update(label="Yükleme Başarılı!", state="complete")
+                        st.rerun()
                 except Exception as e:
                     st.error(f"Hata: {e}")
 
@@ -357,91 +363,101 @@ if prompt := st.chat_input("Buraya bir soru yazın..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
-        sources = []
+    if not st.session_state.indexed_files:
+        with st.chat_message("assistant"):
+            st.error("Önce PDF yükleyip `🚀 VERİLERİ YÜKLE` butonuna basmalısınız.")
+    else:
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            sources = []
 
-        try:
-            if USE_REMOTE_API and is_streaming:
-                with requests.post(
-                    f"{API_BASE}/ask-stream",
-                    data={
-                        "question": prompt,
-                        "top_k": top_k,
-                        "doc_id": st.session_state.active_doc_id,
-                    },
-                    stream=True,
-                    timeout=300,
-                ) as r:
-                    if r.status_code != 200:
-                        st.error(f"Sunucu Hatası: {r.text}")
+            try:
+                if USE_REMOTE_API and is_streaming:
+                    with requests.post(
+                        f"{API_BASE}/ask-stream",
+                        data={
+                            "question": prompt,
+                            "top_k": top_k,
+                            "doc_id": st.session_state.active_doc_id,
+                        },
+                        stream=True,
+                        timeout=300,
+                    ) as r:
+                        if r.status_code != 200:
+                            st.error(f"Sunucu Hatası: {r.text}")
+                        else:
+                            for line in r.iter_lines(decode_unicode=True):
+                                if not line or not line.startswith("data: "):
+                                    continue
+
+                                chunk = line.replace("data: ", "", 1)
+
+                                if chunk == "[DONE]":
+                                    break
+
+                                if chunk.startswith("[ERROR]"):
+                                    st.error(chunk)
+                                    full_response = ""
+                                    break
+
+                                full_response += chunk
+                                message_placeholder.markdown(full_response + " ▌")
+
+                            if full_response:
+                                message_placeholder.markdown(full_response)
+                elif USE_REMOTE_API:
+                    r = requests.post(
+                        f"{API_BASE}/ask",
+                        data={
+                            "question": prompt,
+                            "top_k": top_k,
+                            "doc_id": st.session_state.active_doc_id,
+                        },
+                        timeout=300,
+                    )
+                    if r.status_code == 200:
+                        data = r.json()
+                        full_response = data.get("answer", "")
+                        sources = data.get("sources", [])
+                        message_placeholder.markdown(full_response)
                     else:
-                        for line in r.iter_lines(decode_unicode=True):
-                            if not line or not line.startswith("data: "):
-                                continue
-
-                            chunk = line.replace("data: ", "", 1)
-
-                            if chunk == "[DONE]":
-                                break
-
-                            if chunk.startswith("[ERROR]"):
-                                st.error(chunk)
-                                full_response = ""
-                                break
-
-                            full_response += chunk
-                            message_placeholder.markdown(full_response + " ▌")
-
-                        if full_response:
-                            message_placeholder.markdown(full_response)
-            elif USE_REMOTE_API:
-                r = requests.post(
-                    f"{API_BASE}/ask",
-                    data={
-                        "question": prompt,
-                        "top_k": top_k,
-                        "doc_id": st.session_state.active_doc_id,
-                    },
-                    timeout=300,
-                )
-                if r.status_code == 200:
-                    data = r.json()
-                    full_response = data.get("answer", "")
-                    sources = data.get("sources", [])
-                    message_placeholder.markdown(full_response)
+                        st.error(f"Sunucu Hatası: {r.status_code} - {r.text}")
+                elif is_streaming:
+                    for chunk in local_ask_stream(
+                        prompt,
+                        top_k=top_k,
+                        doc_id=st.session_state.active_doc_id,
+                    ):
+                        full_response += chunk
+                        message_placeholder.markdown(full_response + " ▌")
+                    if full_response:
+                        message_placeholder.markdown(full_response)
                 else:
-                    st.error(f"Sunucu Hatası: {r.status_code} - {r.text}")
-            elif is_streaming:
-                for chunk in local_ask_stream(
-                    prompt,
-                    top_k=top_k,
-                    doc_id=st.session_state.active_doc_id,
-                ):
-                    full_response += chunk
-                    message_placeholder.markdown(full_response + " ▌")
-                if full_response:
+                    full_response, sources = local_ask(
+                        prompt,
+                        top_k=top_k,
+                        doc_id=st.session_state.active_doc_id,
+                    )
                     message_placeholder.markdown(full_response)
-            else:
-                full_response, sources = local_ask(
-                    prompt,
-                    top_k=top_k,
-                    doc_id=st.session_state.active_doc_id,
-                )
-                message_placeholder.markdown(full_response)
 
-            if sources:
-                with st.expander("📚 Kaynaklar"):
-                    for s in sources:
-                        st.write(f"• {s['dosya']} → Parça {s['parca']}")
+                if sources:
+                    with st.expander("📚 Kaynaklar"):
+                        for s in sources:
+                            st.write(f"• {s['dosya']} → Parça {s['parca']}")
 
-            if full_response:
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                if full_response:
+                    st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-        except Exception as e:
-            st.error(f"Bağlantı Hatası: {e}")
-            if USE_REMOTE_API:
-                st.info("Backend çalışıyor mu kontrol edin veya `RAG_API_BASE` değerini doğru URL olarak ayarlayın.")
-            else:
-                st.info("Lokal motor hatası oluştu. `HF_TOKEN` değişkeninin tanımlı olduğunu kontrol edin.")
+            except Exception as e:
+                st.error(f"Bağlantı Hatası: {e}")
+                msg = str(e).lower()
+
+                if "önce pdf yüklemelisiniz" in msg or "once pdf yuklemelisiniz" in msg:
+                    st.info("Dosya seçmek yetmez; `🚀 VERİLERİ YÜKLE` butonuna bastıktan sonra soru sorabilirsiniz.")
+                elif USE_REMOTE_API:
+                    st.info("Backend çalışıyor mu kontrol edin veya `RAG_API_BASE` değerini doğru URL olarak ayarlayın.")
+                elif "hf_token" in msg or "401" in msg or "unauthorized" in msg:
+                    st.info("`HF_TOKEN` değeri bulunamadı/geçersiz olabilir. Streamlit Secrets kaydını kontrol edip uygulamayı yeniden başlatın.")
+                else:
+                    st.info("Lokal motor hatası oluştu. PDF yükleme ve token ayarlarını kontrol edin.")
