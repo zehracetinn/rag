@@ -1,4 +1,6 @@
 import os
+import tempfile
+import uuid
 
 import requests
 import streamlit as st
@@ -209,8 +211,49 @@ button[kind="secondary"]:hover {
 </style>
 """, unsafe_allow_html=True)
 
-# --- BACKEND ---
-API_BASE = os.getenv("RAG_API_BASE", "http://127.0.0.1:8000").rstrip("/")
+# --- BACKEND / ENGINE ---
+API_BASE = os.getenv("RAG_API_BASE", "").strip().rstrip("/")
+USE_REMOTE_API = bool(API_BASE)
+
+
+@st.cache_resource
+def get_local_engine():
+    from rag_core import RAGEngine
+
+    return RAGEngine()
+
+
+def local_reset():
+    engine = get_local_engine()
+    engine.reset()
+
+
+def local_upload(uploaded_file):
+    engine = get_local_engine()
+    name = f"uploaded_{uuid.uuid4().hex}.pdf"
+    path = os.path.join(tempfile.gettempdir(), name)
+
+    with open(path, "wb") as f:
+        f.write(uploaded_file.getvalue())
+
+    engine.build_from_pdf(path, doc_id=uploaded_file.name)
+
+
+def local_ask(question: str, top_k: int, doc_id: str | None):
+    engine = get_local_engine()
+    out = engine.ask(question, top_k=top_k, doc_id=doc_id)
+    if "hata" in out:
+        raise RuntimeError(out["hata"])
+    return out.get("cevap", ""), out.get("kaynaklar", [])
+
+
+def local_ask_stream(question: str, top_k: int, doc_id: str | None):
+    engine = get_local_engine()
+    for chunk in engine.ask_stream(question, top_k=top_k, doc_id=doc_id):
+        if chunk.startswith("[ERROR]"):
+            raise RuntimeError(chunk.replace("[ERROR]", "", 1).strip())
+        yield chunk
+
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -222,19 +265,31 @@ if "active_doc_id" not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<h2>⚙️ Kontrol Paneli</h2>", unsafe_allow_html=True)
-    st.caption(f"Backend: `{API_BASE}`")
+    if USE_REMOTE_API:
+        st.caption(f"Mod: Remote API | Backend: `{API_BASE}`")
+    else:
+        st.caption("Mod: Local Engine (backend gerekmiyor)")
+
     st.markdown("### 📄 Doküman Yönetimi")
     if st.button("🧹 Hafızayı Temizle", use_container_width=True):
         try:
-            rr = requests.post(f"{API_BASE}/reset", timeout=60)
-            if rr.status_code == 200:
+            if USE_REMOTE_API:
+                rr = requests.post(f"{API_BASE}/reset", timeout=60)
+                if rr.status_code != 200:
+                    st.error(f"Temizleme hatası: {rr.text}")
+                else:
+                    st.session_state.indexed_files = []
+                    st.session_state.active_doc_id = None
+                    st.session_state.messages = []
+                    st.success("Sistem hafızası temizlendi.")
+                    st.rerun()
+            else:
+                local_reset()
                 st.session_state.indexed_files = []
                 st.session_state.active_doc_id = None
                 st.session_state.messages = []
                 st.success("Sistem hafızası temizlendi.")
                 st.rerun()
-            else:
-                st.error(f"Temizleme hatası: {rr.text}")
         except Exception as e:
             st.error(f"Temizleme hatası: {e}")
 
@@ -250,10 +305,17 @@ with st.sidebar:
             with st.status("Yapay zeka belgeleri okuyor...", expanded=False) as status:
                 try:
                     for file in uploaded_files:
-                        files = {"file": (file.name, file.getvalue(), "application/pdf")}
-                        response = requests.post(f"{API_BASE}/upload", files=files, timeout=300)
-                        if response.status_code == 200 and file.name not in st.session_state.indexed_files:
+                        if USE_REMOTE_API:
+                            files = {"file": (file.name, file.getvalue(), "application/pdf")}
+                            response = requests.post(f"{API_BASE}/upload", files=files, timeout=300)
+                            if response.status_code != 200:
+                                raise RuntimeError(response.text)
+                        else:
+                            local_upload(file)
+
+                        if file.name not in st.session_state.indexed_files:
                             st.session_state.indexed_files.append(file.name)
+
                     status.update(label="Yükleme Başarılı!", state="complete")
                     st.rerun()
                 except Exception as e:
@@ -301,7 +363,7 @@ if prompt := st.chat_input("Buraya bir soru yazın..."):
         sources = []
 
         try:
-            if is_streaming:
+            if USE_REMOTE_API and is_streaming:
                 with requests.post(
                     f"{API_BASE}/ask-stream",
                     data={
@@ -334,7 +396,7 @@ if prompt := st.chat_input("Buraya bir soru yazın..."):
 
                         if full_response:
                             message_placeholder.markdown(full_response)
-            else:
+            elif USE_REMOTE_API:
                 r = requests.post(
                     f"{API_BASE}/ask",
                     data={
@@ -351,6 +413,23 @@ if prompt := st.chat_input("Buraya bir soru yazın..."):
                     message_placeholder.markdown(full_response)
                 else:
                     st.error(f"Sunucu Hatası: {r.status_code} - {r.text}")
+            elif is_streaming:
+                for chunk in local_ask_stream(
+                    prompt,
+                    top_k=top_k,
+                    doc_id=st.session_state.active_doc_id,
+                ):
+                    full_response += chunk
+                    message_placeholder.markdown(full_response + " ▌")
+                if full_response:
+                    message_placeholder.markdown(full_response)
+            else:
+                full_response, sources = local_ask(
+                    prompt,
+                    top_k=top_k,
+                    doc_id=st.session_state.active_doc_id,
+                )
+                message_placeholder.markdown(full_response)
 
             if sources:
                 with st.expander("📚 Kaynaklar"):
@@ -362,4 +441,7 @@ if prompt := st.chat_input("Buraya bir soru yazın..."):
 
         except Exception as e:
             st.error(f"Bağlantı Hatası: {e}")
-            st.info("Backend çalışıyor mu kontrol edin veya `RAG_API_BASE` değerini doğru URL olarak ayarlayın.")
+            if USE_REMOTE_API:
+                st.info("Backend çalışıyor mu kontrol edin veya `RAG_API_BASE` değerini doğru URL olarak ayarlayın.")
+            else:
+                st.info("Lokal motor hatası oluştu. `HF_TOKEN` değişkeninin tanımlı olduğunu kontrol edin.")
