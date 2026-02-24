@@ -12,7 +12,9 @@ from sentence_transformers import SentenceTransformer
 # --------------------------------------------------
 # CONFIG
 # --------------------------------------------------
-HF_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
+HF_MODEL = os.getenv("HF_MODEL", "HuggingFaceH4/zephyr-7b-beta")
+HF_URL = os.getenv("HF_URL", f"https://router.huggingface.co/hf-inference/models/{HF_MODEL}")
+HF_LEGACY_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 SUMMARY_KEYWORDS = [
@@ -115,34 +117,54 @@ def call_llm(prompt: str, max_tokens: int = 300, temperature: float = 0.2) -> st
         },
     }
 
-    try:
-        response = requests.post(
-            HF_URL,
-            headers=headers,
-            json=payload,
-            timeout=REQUEST_TIMEOUT,
-        )
-        response.raise_for_status()
-    except requests.RequestException as e:
-        raise RuntimeError(f"HuggingFace API isteği başarısız: {e}") from e
+    urls = [HF_URL]
+    if HF_LEGACY_URL != HF_URL:
+        urls.append(HF_LEGACY_URL)
 
-    try:
-        data = response.json()
-    except ValueError as e:
-        raise RuntimeError("HuggingFace API geçersiz JSON döndürdü.") from e
+    last_error = None
 
-    if isinstance(data, dict) and data.get("error"):
-        raise RuntimeError(f"HuggingFace API hatası: {data['error']}")
+    for url in urls:
+        try:
+            response = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=REQUEST_TIMEOUT,
+            )
 
-    if isinstance(data, list) and data:
-        first = data[0]
-        if isinstance(first, dict) and isinstance(first.get("generated_text"), str):
-            return first["generated_text"].strip()
+            # Bazı modeller legacy endpointte 404/410 döndürür; sonraki endpointi dene.
+            if response.status_code in (404, 410):
+                last_error = f"{response.status_code} {response.reason} ({url})"
+                continue
 
-    if isinstance(data, dict) and isinstance(data.get("generated_text"), str):
-        return data["generated_text"].strip()
+            response.raise_for_status()
 
-    raise RuntimeError("HuggingFace API yanıt formatı beklenen yapıda değil.")
+            try:
+                data = response.json()
+            except ValueError as e:
+                raise RuntimeError("HuggingFace API geçersiz JSON döndürdü.") from e
+
+            if isinstance(data, dict) and data.get("error"):
+                raise RuntimeError(f"HuggingFace API hatası: {data['error']}")
+
+            if isinstance(data, list) and data:
+                first = data[0]
+                if isinstance(first, dict) and isinstance(first.get("generated_text"), str):
+                    return first["generated_text"].strip()
+
+            if isinstance(data, dict) and isinstance(data.get("generated_text"), str):
+                return data["generated_text"].strip()
+
+            raise RuntimeError("HuggingFace API yanıt formatı beklenen yapıda değil.")
+
+        except requests.RequestException as e:
+            last_error = str(e)
+            continue
+
+    raise RuntimeError(
+        "HuggingFace API isteği başarısız. "
+        f"Model/endpoint erişimini kontrol edin (HF_MODEL={HF_MODEL}). Son hata: {last_error}"
+    )
 
 
 # --------------------------------------------------
