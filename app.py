@@ -229,6 +229,17 @@ def get_local_engine():
     return RAGEngine()
 
 
+@st.cache_data
+def get_local_llm_info():
+    import rag_core
+
+    return {
+        "hf_url": getattr(rag_core, "HF_URL", "(bilinmiyor)"),
+        "hf_model": getattr(rag_core, "HF_MODEL", "(bilinmiyor)"),
+        "token_set": bool(os.getenv("HF_TOKEN")),
+    }
+
+
 def local_reset():
     engine = get_local_engine()
     engine.reset()
@@ -275,6 +286,9 @@ with st.sidebar:
         st.caption(f"Mod: Remote API | Backend: `{API_BASE}`")
     else:
         st.caption("Mod: Local Engine (backend gerekmiyor)")
+        llm_info = get_local_llm_info()
+        st.caption(f"LLM URL: `{llm_info['hf_url']}`")
+        st.caption(f"LLM Model: `{llm_info['hf_model']}`")
 
     st.markdown("### 📄 Doküman Yönetimi")
     if st.button("🧹 Hafızayı Temizle", use_container_width=True):
@@ -459,5 +473,7 @@ if prompt := st.chat_input("Buraya bir soru yazın..."):
                     st.info("Backend çalışıyor mu kontrol edin veya `RAG_API_BASE` değerini doğru URL olarak ayarlayın.")
                 elif "hf_token" in msg or "401" in msg or "unauthorized" in msg:
                     st.info("`HF_TOKEN` değeri bulunamadı/geçersiz olabilir. Streamlit Secrets kaydını kontrol edip uygulamayı yeniden başlatın.")
+                elif "api-inference.huggingface.co" in msg:
+                    st.info("Canlıda eski deploy çalışıyor olabilir. Uygulamayı Reboot + Clear cache yapıp son commit ile yeniden deploy edin.")
                 else:
                     st.info("Lokal motor hatası oluştu. PDF yükleme ve token ayarlarını kontrol edin.")

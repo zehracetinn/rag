@@ -12,7 +12,8 @@ from sentence_transformers import SentenceTransformer
 # --------------------------------------------------
 # CONFIG
 # --------------------------------------------------
-HF_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
+HF_URL = "https://router.huggingface.co/v1/chat/completions"
+HF_MODEL = os.getenv("HF_MODEL", "HuggingFaceH4/zephyr-7b-beta:hf-inference")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 SUMMARY_KEYWORDS = [
@@ -107,7 +108,7 @@ def call_llm(prompt: str, max_tokens: int = 300, temperature: float = 0.2) -> st
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "mistralai/Mistral-7B-Instruct-v0.3",
+        "model": HF_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": temperature,
