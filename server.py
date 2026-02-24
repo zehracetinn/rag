@@ -4,7 +4,7 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse, StreamingResponse
 from rag_core import RAGEngine
 
-app = FastAPI(title="Local RAG (Ollama + FAISS + MPS)")
+app = FastAPI(title="Local RAG (HF + FAISS + MPS)")
 
 engine = RAGEngine()
 DEFAULT_PDF = os.getenv("RAG_PDF", "")
@@ -89,7 +89,7 @@ async def ask(
 
     except Exception as e:
         return JSONResponse(
-            {"error": f"Ollama hatası: {str(e)}"},
+            {"error": f"RAG hatası: {str(e)}"},
             status_code=500,
         )
 

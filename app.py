@@ -1,5 +1,7 @@
-import streamlit as st
+import os
+
 import requests
+import streamlit as st
 
 # --- YAPILANDIRMA ---
 st.set_page_config(
@@ -208,7 +210,7 @@ button[kind="secondary"]:hover {
 """, unsafe_allow_html=True)
 
 # --- BACKEND ---
-API_BASE = "http://127.0.0.1:8000"
+API_BASE = os.getenv("RAG_API_BASE", "http://127.0.0.1:8000").rstrip("/")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -220,6 +222,7 @@ if "active_doc_id" not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown("<h2>⚙️ Kontrol Paneli</h2>", unsafe_allow_html=True)
+    st.caption(f"Backend: `{API_BASE}`")
     st.markdown("### 📄 Doküman Yönetimi")
     if st.button("🧹 Hafızayı Temizle", use_container_width=True):
         try:
@@ -359,3 +362,4 @@ if prompt := st.chat_input("Buraya bir soru yazın..."):
 
         except Exception as e:
             st.error(f"Bağlantı Hatası: {e}")
+            st.info("Backend çalışıyor mu kontrol edin veya `RAG_API_BASE` değerini doğru URL olarak ayarlayın.")
