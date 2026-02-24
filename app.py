@@ -12,116 +12,162 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+/* --- YAZI TİPİ --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* ---------------- GLOBAL ---------------- */
 html, body, [class*="st-"] {
     font-family: 'Inter', sans-serif;
-    color: #EAF6FF !important;
+    color: #E2E8F0 !important; /* Göz yormayan, okunaklı kırık beyaz */
 }
 
-/* BACKGROUND */
+/* --- ANİMASYONLAR --- */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* --- ANA ARKA PLAN (NETFLIX DERİNLİĞİ) --- */
 .stApp {
-    background: radial-gradient(circle at 20% 20%, rgba(0,200,255,0.12), transparent 40%),
-                radial-gradient(circle at 80% 40%, rgba(0,255,200,0.08), transparent 40%),
-                linear-gradient(135deg, #050b14 0%, #07131f 50%, #040a12 100%);
+    background-color: #0B0E14;
+    background-image: 
+        radial-gradient(circle at 15% 50%, rgba(77, 168, 255, 0.04), transparent 50%),
+        radial-gradient(circle at 85% 30%, rgba(200, 50, 150, 0.04), transparent 50%);
     background-attachment: fixed;
 }
 
-/* ---------------- SIDEBAR ---------------- */
-/* Genişlik kısıtlaması kaldırıldı, Streamlit'in mobil uyumluluğuna bırakıldı */
+/* --- SIDEBAR (CAM EFEKTİ & YUMUŞAK GÖLGE) --- */
 [data-testid="stSidebar"] {
-    background: rgba(8,18,32,0.97) !important;
-    backdrop-filter: blur(25px);
-    border-right: 1px solid rgba(255,255,255,0.06);
+    background: rgba(15, 20, 28, 0.85) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 2px 0 15px rgba(0,0,0,0.3);
 }
 
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
-    font-weight: 800 !important;
-    color: #4DA8FF !important;
+    font-weight: 700 !important;
+    background: linear-gradient(135deg, #4DA8FF, #D946EF); /* Instagram/AI geçişi */
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
 }
 
-[data-testid="stSidebar"] .stSlider > div {
-    padding-top: 10px;
-    padding-bottom: 10px;
+/* SIDEBAR BEYAZ BUTON VE UPLOADER DÜZELTMESİ */
+[data-testid="stFileUploadDropzone"] {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    border: 1.5px dashed rgba(255, 255, 255, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 20px !important;
+    color: #A0AEC0 !important;
+    transition: all 0.3s ease;
+}
+[data-testid="stFileUploadDropzone"]:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    border-color: #4DA8FF !important;
 }
 
-/* ---------------- ANA BLOK ---------------- */
-/* Ekran küçüldüğünde paddingler daralacak şekilde % ve rem kullanıldı */
+/* --- ANA BLOK --- */
 .main .block-container {
     padding-left: 5% !important;
     padding-right: 5% !important;
-    padding-top: 2rem !important;
-    max-width: 1200px !important;
+    padding-top: 3rem !important;
+    max-width: 900px !important; /* ChatGPT gibi tam ortalanmış ve okunaklı */
 }
 
-/* ---------------- CHAT MESAJLARI ---------------- */
+/* --- SOHBET MESAJLARI (CHATGPT DÜZENİ) --- */
 .stChatMessage {
-    background: rgba(255,255,255,0.05) !important;
-    backdrop-filter: blur(16px);
+    background: rgba(20, 25, 35, 0.6) !important;
+    backdrop-filter: blur(10px);
     border-radius: 16px;
-    border: 1px solid rgba(255,255,255,0.08);
-    padding: 1.5rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 1.5rem 2rem !important;
     margin-bottom: 1.5rem !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    animation: fadeIn 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-/* ---------------- CHAT INPUT ---------------- */
-/* Paddingler ve fontlar mobile uyumlu hale getirildi */
+/* Kullanıcı mesajını biraz daha farklılaştır (İsteğe bağlı) */
+[data-testid="chatAvatarIcon-user"] {
+    background: linear-gradient(135deg, #FF6B6B, #5562EA) !important;
+}
+[data-testid="chatAvatarIcon-assistant"] {
+    background: linear-gradient(135deg, #05D5FF, #5585FF) !important;
+}
+
+/* --- CHAT INPUT (GÖZ ALMAYAN, MODERN KUTU) --- */
 .stChatInputContainer {
     padding: 1rem 5% 2rem 5% !important;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(5,11,20,0.9) 100%);
+    background: transparent !important; /* Beyaz arka planı sildik */
 }
 
 .stChatInputContainer textarea {
-    background: rgba(255,255,255,0.07) !important;
-    border: 2px solid rgba(77,168,255,0.5) !important;
-    border-radius: 20px !important;
-    padding: 1rem !important;
-    color: #ffffff !important;
-    box-shadow: 0 0 15px rgba(77,168,255,0.2);
-    transition: all 0.3s ease;
+    background: rgba(20, 25, 35, 0.8) !important;
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 24px !important;
+    padding: 1.2rem 1.5rem !important;
+    color: #F8FAFC !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .stChatInputContainer textarea:focus {
-    border: 2px solid #4DA8FF !important;
-    box-shadow: 0 0 30px rgba(77,168,255,0.4);
+    border: 1px solid #4DA8FF !important;
+    box-shadow: 0 0 20px rgba(77, 168, 255, 0.15), 0 8px 24px rgba(0, 0, 0, 0.3);
+    outline: none !important;
 }
 
-/* SEND BUTON */
+/* --- PRIMARY BUTONLAR (INSTAGRAM/AI ANİMASYONLU) --- */
 button[kind="primary"] {
-    background: linear-gradient(135deg, #4DA8FF, #6FE7D2) !important;
-    color: #07131f !important;
-    font-weight: 700 !important;
-    border-radius: 20px !important;
+    background: linear-gradient(-45deg, #EE7752, #E73C7E, #23A6D5, #23D5AB) !important;
+    background-size: 300% 300% !important;
+    animation: gradientMove 5s ease infinite !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    border-radius: 12px !important;
     border: none !important;
-    transition: all 0.3s ease;
+    padding: 0.6rem 1.5rem !important;
+    box-shadow: 0 4px 15px rgba(231, 60, 126, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
 }
 
 button[kind="primary"]:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(77,168,255,0.4);
+    box-shadow: 0 8px 25px rgba(231, 60, 126, 0.5);
 }
 
-/* ---------------- EXPANDER ---------------- */
-.stExpander {
-    background: rgba(255,255,255,0.04) !important;
+/* SECONDARY BUTONLAR (Hafızayı Temizle vb.) */
+button[kind="secondary"] {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: #E2E8F0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-radius: 12px !important;
-    padding: 10px !important;
+    transition: all 0.3s ease;
 }
 
-/* ---------------- SCROLLBAR ---------------- */
+button[kind="secondary"]:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* --- SCROLLBAR --- */
 ::-webkit-scrollbar {
     width: 6px;
+    background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.2);
+    background: rgba(255, 255, 255, 0.15);
     border-radius: 10px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255,255,255,0.35);
+    background: rgba(255, 255, 255, 0.3);
 }
 
 </style>
