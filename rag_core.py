@@ -13,7 +13,7 @@ from sentence_transformers import SentenceTransformer
 # CONFIG
 # --------------------------------------------------
 HF_URL = "https://router.huggingface.co/v1/chat/completions"
-HF_MODEL = os.getenv("HF_MODEL", "HuggingFaceH4/zephyr-7b-beta:hf-inference")
+HF_MODEL = os.getenv("HF_MODEL", "HuggingFaceH4/zephyr-7b-beta")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 SUMMARY_KEYWORDS = [
@@ -107,34 +107,51 @@ def call_llm(prompt: str, max_tokens: int = 300, temperature: float = 0.2) -> st
         "Authorization": f"Bearer {HF_TOKEN}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": HF_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "stream": False,
-    }
 
-    try:
-        r = requests.post(
-            HF_URL,
-            headers=headers,
-            json=payload,
-            timeout=REQUEST_TIMEOUT,
-        )
-        r.raise_for_status()
-    except requests.RequestException as e:
-        raise RuntimeError(f"HuggingFace API isteği başarısız: {e}") from e
+    models_to_try = [HF_MODEL]
+    if ":" in HF_MODEL:
+        bare = HF_MODEL.split(":", 1)[0]
+        if bare not in models_to_try:
+            models_to_try.append(bare)
 
-    try:
-        data = r.json()
-    except ValueError as e:
-        raise RuntimeError("HuggingFace API geçersiz JSON döndürdü.") from e
+    last_error = None
 
-    try:
-        return data["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        raise RuntimeError("HuggingFace API yanıt formatı beklenen yapıda değil.") from e
+    for model_name in models_to_try:
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": False,
+        }
+
+        try:
+            r = requests.post(
+                HF_URL,
+                headers=headers,
+                json=payload,
+                timeout=REQUEST_TIMEOUT,
+            )
+        except requests.RequestException as e:
+            last_error = str(e)
+            continue
+
+        if r.status_code >= 400:
+            body = r.text.strip()
+            last_error = f"{r.status_code} {r.reason}: {body}"
+            continue
+
+        try:
+            data = r.json()
+        except ValueError as e:
+            raise RuntimeError("HuggingFace API geçersiz JSON döndürdü.") from e
+
+        try:
+            return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            raise RuntimeError(f"HuggingFace API yanıt formatı beklenen yapıda değil: {data}") from e
+
+    raise RuntimeError(f"HuggingFace API isteği başarısız: {last_error}")
 
 
 # --------------------------------------------------
