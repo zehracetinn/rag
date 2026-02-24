@@ -12,7 +12,7 @@ from sentence_transformers import SentenceTransformer
 # --------------------------------------------------
 # CONFIG
 # --------------------------------------------------
-HF_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+HF_URL = "https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta"
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 SUMMARY_KEYWORDS = [
