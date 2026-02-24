@@ -13,7 +13,11 @@ from sentence_transformers import SentenceTransformer
 # CONFIG
 # --------------------------------------------------
 HF_URL = "https://router.huggingface.co/v1/chat/completions"
-HF_MODEL = os.getenv("HF_MODEL", "HuggingFaceH4/zephyr-7b-beta")
+HF_MODELS = os.getenv(
+    "HF_MODELS",
+    "Qwen/Qwen2.5-7B-Instruct:hf-inference,HuggingFaceH4/zephyr-7b-beta:hf-inference",
+)
+HF_MODEL = os.getenv("HF_MODEL", HF_MODELS.split(",")[0].strip())
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 SUMMARY_KEYWORDS = [
@@ -108,11 +112,26 @@ def call_llm(prompt: str, max_tokens: int = 300, temperature: float = 0.2) -> st
         "Content-Type": "application/json",
     }
 
-    models_to_try = [HF_MODEL]
-    if ":" in HF_MODEL:
-        bare = HF_MODEL.split(":", 1)[0]
-        if bare not in models_to_try:
-            models_to_try.append(bare)
+    env_models = [m.strip() for m in HF_MODELS.split(",") if m.strip()]
+    base_models = [HF_MODEL] + env_models
+
+    # Preserve order, remove duplicates
+    seen = set()
+    models_to_try = []
+    for model in base_models:
+        if model and model not in seen:
+            seen.add(model)
+            models_to_try.append(model)
+
+    # Try both provider-qualified and bare model names when needed
+    expanded = []
+    for model in models_to_try:
+        expanded.append(model)
+        if ":" in model:
+            bare = model.split(":", 1)[0]
+            if bare not in expanded:
+                expanded.append(bare)
+    models_to_try = expanded
 
     last_error = None
 
@@ -151,7 +170,10 @@ def call_llm(prompt: str, max_tokens: int = 300, temperature: float = 0.2) -> st
         except Exception as e:
             raise RuntimeError(f"HuggingFace API yanıt formatı beklenen yapıda değil: {data}") from e
 
-    raise RuntimeError(f"HuggingFace API isteği başarısız: {last_error}")
+    raise RuntimeError(
+        "HuggingFace API isteği başarısız. "
+        f"Denenen modeller: {models_to_try}. Son hata: {last_error}"
+    )
 
 
 # --------------------------------------------------
