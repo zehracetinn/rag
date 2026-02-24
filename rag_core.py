@@ -1,8 +1,9 @@
-import os
 import json
+import os
 import re
-import numpy as np
+
 import faiss
+import numpy as np
 import requests
 import torch
 from pypdf import PdfReader
@@ -11,8 +12,8 @@ from sentence_transformers import SentenceTransformer
 # --------------------------------------------------
 # CONFIG
 # --------------------------------------------------
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "llama3-tr")
+HF_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 SUMMARY_KEYWORDS = [
     "ana konu",
@@ -97,6 +98,53 @@ def mmr_select(query_vec, doc_vecs, candidates, k=3, lam=0.65):
     return selected
 
 
+def call_llm(prompt: str, max_tokens: int = 300, temperature: float = 0.2) -> str:
+    if not HF_TOKEN:
+        raise RuntimeError("HF_TOKEN tanımlı değil. Ortam değişkeni olarak ayarlayın.")
+
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": max_tokens,
+            "temperature": temperature,
+            "return_full_text": False,
+        },
+    }
+
+    try:
+        response = requests.post(
+            HF_URL,
+            headers=headers,
+            json=payload,
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+    except requests.RequestException as e:
+        raise RuntimeError(f"HuggingFace API isteği başarısız: {e}") from e
+
+    try:
+        data = response.json()
+    except ValueError as e:
+        raise RuntimeError("HuggingFace API geçersiz JSON döndürdü.") from e
+
+    if isinstance(data, dict) and data.get("error"):
+        raise RuntimeError(f"HuggingFace API hatası: {data['error']}")
+
+    if isinstance(data, list) and data:
+        first = data[0]
+        if isinstance(first, dict) and isinstance(first.get("generated_text"), str):
+            return first["generated_text"].strip()
+
+    if isinstance(data, dict) and isinstance(data.get("generated_text"), str):
+        return data["generated_text"].strip()
+
+    raise RuntimeError("HuggingFace API yanıt formatı beklenen yapıda değil.")
+
+
 # --------------------------------------------------
 # RAG ENGINE
 # --------------------------------------------------
@@ -168,7 +216,7 @@ class RAGEngine:
             if len(sentences) >= 5:
                 return " ".join(sentences[:5])
 
-        cleaned = (raw_answer or "")
+        cleaned = raw_answer or ""
         cleaned = re.sub(r"\b\d+\)\s*", " ", cleaned)
         cleaned = re.sub(r"\b\d+\.\s*", " ", cleaned)
         cleaned = self._normalize_ws(cleaned)
@@ -214,61 +262,11 @@ JSON:
 """.strip()
 
     def ask_stream(self, question: str, top_k: int = 6, doc_id: str | None = None):
-        if self._is_summary_question(question):
-            out = self.ask(question, top_k=top_k, doc_id=doc_id)
-            if "hata" in out:
-                yield f"[ERROR] {out['hata']}"
-            else:
-                yield out.get("cevap", "")
+        result = self.ask(question, top_k=top_k, doc_id=doc_id)
+        if "hata" in result:
+            yield f"[ERROR] {result['hata']}"
             return
-
-        context, _sources = self._hybrid_context(question, top_k=top_k, doc_id=doc_id)
-        prompt = self._build_prompt(context, question)
-        is_summary = self._is_summary_question(question)
-
-        payload = {
-            "model": MODEL_NAME,
-            "prompt": prompt,
-            "stream": True,
-            "options": {
-                "num_predict": MAX_TOKENS_SUMMARY if is_summary else MAX_TOKENS_QA,
-                "temperature": 0.15 if is_summary else 0.0,
-                "top_p": 0.9 if is_summary else 0.8,
-                "repeat_penalty": 1.1,
-            },
-        }
-
-        try:
-            with requests.post(
-                OLLAMA_URL,
-                json=payload,
-                stream=True,
-                timeout=REQUEST_TIMEOUT,
-            ) as r:
-                r.raise_for_status()
-
-                for line in r.iter_lines():
-                    if not line:
-                        continue
-
-                    try:
-                        decoded = line.decode("utf-8").strip()
-                        if not decoded:
-                            continue
-
-                        data = json.loads(decoded)
-
-                        if "response" in data:
-                            yield data["response"]
-
-                        if data.get("done", False):
-                            break
-
-                    except json.JSONDecodeError:
-                        continue
-
-        except Exception as e:
-            yield f"[ERROR] {str(e)}"
+        yield result["cevap"]
 
     # --------------------------------------------------
     def build_from_pdf(self, pdf_path: str, doc_id: str | None = None):
@@ -376,10 +374,10 @@ JSON:
     def _build_prompt(self, context: str, question: str):
         if self._is_summary_question(question):
             return self._build_summary_prompt(context, question)
-        else:
-            instruction = (
-                "Soruya yalnızca bağlamdan cevap ver. Bağlamda yoksa sadece 'Bu bilgi dokümanda bulunamadı.' yaz."
-            )
+
+        instruction = (
+            "Soruya yalnızca bağlamdan cevap ver. Bağlamda yoksa sadece 'Bu bilgi dokümanda bulunamadı.' yaz."
+        )
 
         return f"""Sen bir doküman soru-cevap asistanısın.
 
@@ -400,36 +398,21 @@ CEVAP:
 
     # --------------------------------------------------
     def ask(self, question: str, top_k: int = 6, doc_id: str | None = None):
-        context, sources = self._hybrid_context(question, top_k=top_k, doc_id=doc_id)
-        prompt = self._build_prompt(context, question)
-        is_summary = self._is_summary_question(question)
-
-        payload = {
-            "model": MODEL_NAME,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "num_predict": MAX_TOKENS_SUMMARY if is_summary else MAX_TOKENS_QA,
-                "temperature": 0.15 if is_summary else 0.0,
-                "top_p": 0.9 if is_summary else 0.8,
-                "repeat_penalty": 1.1,
-            },
-        }
-
         try:
-            r = requests.post(
-                OLLAMA_URL,
-                json=payload,
-                timeout=REQUEST_TIMEOUT,
-            )
-            r.raise_for_status()
+            context, sources = self._hybrid_context(question, top_k=top_k, doc_id=doc_id)
+            prompt = self._build_prompt(context, question)
+            is_summary = self._is_summary_question(question)
 
-            answer = r.json().get("response", "").strip()
+            answer = call_llm(
+                prompt,
+                max_tokens=MAX_TOKENS_SUMMARY if is_summary else MAX_TOKENS_QA,
+                temperature=0.15 if is_summary else 0.0,
+            )
+
             if is_summary:
                 answer = self._postprocess_summary(answer)
 
-            return {"cevap": answer, "kaynaklar": sources}
-
+            return {"cevap": answer.strip(), "kaynaklar": sources}
         except Exception as e:
             return {"hata": str(e)}
 
