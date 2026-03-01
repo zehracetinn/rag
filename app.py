@@ -1,3 +1,4 @@
+import html
 import os
 import tempfile
 import uuid
@@ -342,8 +343,9 @@ with st.sidebar:
                     st.error(f"Hata: {e}")
 
     for file_name in st.session_state.indexed_files:
+        safe_file_name = html.escape(file_name)
         st.markdown(
-            f"<div style='color:#FFD700; border:1px solid rgba(255,215,0,0.5); padding:8px; border-radius:8px; margin-bottom:5px; font-size:0.9rem;'>📁 {file_name} aktif</div>",
+            f"<div style='color:#FFD700; border:1px solid rgba(255,215,0,0.5); padding:8px; border-radius:8px; margin-bottom:5px; font-size:0.9rem;'>📁 {safe_file_name} aktif</div>",
             unsafe_allow_html=True,
         )
 

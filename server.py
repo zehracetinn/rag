@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from fastapi import FastAPI, UploadFile, File, Form
@@ -5,6 +6,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from rag_core import RAGEngine
 
 app = FastAPI(title="Local RAG (HF + FAISS + MPS)")
+logger = logging.getLogger(__name__)
 
 engine = RAGEngine()
 DEFAULT_PDF = os.getenv("RAG_PDF", "")
@@ -35,13 +37,13 @@ async def upload_pdf(file: UploadFile = File(...)):
 
         return {
             "ok": True,
-            "pdf_path": path,
             "chunks": len(engine.chunks),
         }
 
     except Exception as e:
+        logger.exception("Upload failed")
         return JSONResponse(
-            {"error": f"Upload hatası: {str(e)}"},
+            {"error": "Upload hatası oluştu."},
             status_code=500,
         )
 
@@ -55,7 +57,8 @@ async def reset_engine():
         engine.reset()
         return {"ok": True}
     except Exception as e:
-        return JSONResponse({"error": f"Reset hatası: {str(e)}"}, status_code=500)
+        logger.exception("Reset failed")
+        return JSONResponse({"error": "Reset hatası oluştu."}, status_code=500)
 
 
 # --------------------------------------------------
@@ -77,8 +80,9 @@ async def ask(
         out = engine.ask(question, top_k=top_k, doc_id=doc_id)
 
         if "hata" in out:
+            logger.error("RAG error: %s", out.get("hata"))
             return JSONResponse(
-                {"error": out["hata"]},
+                {"error": "RAG hatası oluştu."},
                 status_code=500,
             )
 
@@ -88,8 +92,9 @@ async def ask(
         }
 
     except Exception as e:
+        logger.exception("RAG failed")
         return JSONResponse(
-            {"error": f"RAG hatası: {str(e)}"},
+            {"error": "RAG hatası oluştu."},
             status_code=500,
         )
 
@@ -115,6 +120,7 @@ async def ask_stream(
                 yield f"data: {token}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: [ERROR] {str(e)}\n\n"
+            logger.exception("RAG stream failed")
+            yield "data: [ERROR] RAG hatası oluştu.\n\n"
 
     return StreamingResponse(event_gen(), media_type="text/event-stream")
